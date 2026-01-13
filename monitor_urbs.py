@@ -217,71 +217,41 @@ class URBSMonitor:
             return ""
     
     def extract_content(self, html: str) -> str:
-        """Extrai conteúdo relevante do HTML"""
+        """Extrai APENAS os títulos relevantes do boletim"""
         if not html:
             return ""
-        
-        try:
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            # Remover elementos irrelevantes
-            for element in soup(['script', 'style', 'meta', 'link', 'iframe', 
-                               'noscript', 'nav', 'footer', 'header', 'aside']):
-                element.decompose()
-            
-            content_parts = []
-            
-            # Extrair títulos principais
-            for heading in soup.find_all(['h1', 'h2', 'h3']):
-                text = heading.get_text(strip=True)
-                if text and len(text) > 3:
-                    content_parts.append(f"TÍTULO: {text}")
-            
-            # Extrair tabelas (provavelmente onde estão os dados de transporte)
-            for table in soup.find_all('table'):
-                table_data = []
-                for row in table.find_all('tr')[:30]:  # Primeiras 30 linhas
-                    cells = row.find_all(['td', 'th'])
-                    if cells:
-                        row_text = ' | '.join(
-                            cell.get_text(strip=True) 
-                            for cell in cells 
-                            if cell.get_text(strip=True)
-                        )
-                        if row_text:
-                            table_data.append(row_text)
-                
-                if table_data:
-                    content_parts.append("TABELA:")
-                    content_parts.extend(table_data)
-            
-            # Extrair parágrafos importantes
-            for p in soup.find_all('p'):
-                text = p.get_text(strip=True)
-                if text and len(text) > 30:
-                    content_parts.append(text)
-            
-            # Extrair listas
-            for ul in soup.find_all(['ul', 'ol']):
-                for li in ul.find_all('li'):
-                    text = li.get_text(strip=True)
-                    if text and len(text) > 10:
-                        content_parts.append(f"• {text}")
-            
-            # Juntar tudo
-            full_content = '\n'.join(content_parts)
-            
-            # NORMALIZAR: remover timestamps, datas, horários dinâmicos
-            full_content = self.normalize_content(full_content)
-            
-            logging.info(f"📄 Conteúdo extraído: {len(full_content)} caracteres")
-            logging.info(f"📋 {len(content_parts)} elementos encontrados")
-            
-            return full_content
-        
-        except Exception as e:
-            logging.error(f"❌ Erro ao extrair conteúdo: {e}")
-            return ""
+
+        from bs4 import BeautifulSoup
+        import re
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Remover lixo
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+
+        titles = []
+
+        for heading in soup.find_all(["h1", "h2", "h3"]):
+            text = heading.get_text(" ", strip=True)
+
+            if not text:
+                continue
+
+            # Filtros para evitar lixo
+            if len(text) < 10:
+                continue
+
+            # Ignorar rodapé e links institucionais
+            if re.search(r"(URBANIZAÇÃO DE CURITIBA|©|CURITIBA-OUVE|Secretarias)", text, re.I):
+                continue
+
+            titles.append(f"TÍTULO: {text}")
+
+        # Remove duplicados e ordena
+        titles = sorted(set(titles))
+
+        return "\n".join(titles)
     
     def normalize_content(self, content: str) -> str:
         """Normaliza conteúdo para evitar falsos positivos"""
