@@ -72,9 +72,11 @@ class URBSMonitor:
         self.gmail_user = gmail_user
         self.gmail_password = gmail_password
         
-        # Arquivos de dados
-        self.hash_file = Path("urbs_hash.json")
-        self.content_file = Path("urbs_content.txt")
+        # Arquivos de dados (organizados em pasta)
+        self.data_dir = Path("data")
+        self.data_dir.mkdir(exist_ok=True)
+        self.hash_file = self.data_dir / "urbs_hash.json"
+        self.content_file = self.data_dir / "urbs_content.txt"
         
         # Configurar logging
         self.setup_logging()
@@ -269,6 +271,9 @@ class URBSMonitor:
             # Juntar tudo
             full_content = '\n'.join(content_parts)
             
+            # NORMALIZAR: remover timestamps, datas, horários dinâmicos
+            full_content = self.normalize_content(full_content)
+            
             logging.info(f"📄 Conteúdo extraído: {len(full_content)} caracteres")
             logging.info(f"📋 {len(content_parts)} elementos encontrados")
             
@@ -277,6 +282,25 @@ class URBSMonitor:
         except Exception as e:
             logging.error(f"❌ Erro ao extrair conteúdo: {e}")
             return ""
+    
+    def normalize_content(self, content: str) -> str:
+        """Normaliza conteúdo para evitar falsos positivos"""
+        import re
+        
+        # Remover timestamps e datas
+        content = re.sub(r'\d{1,2}/\d{1,2}/\d{2,4}', '', content)
+        content = re.sub(r'\d{1,2}:\d{2}(?::\d{2})?', '', content)
+        
+        # Remover "atualizado em", "última atualização", etc
+        content = re.sub(r'(?i)(atualizado|última atualização|last update).*?\n', '', content)
+        
+        # Remover linhas muito curtas (ruído)
+        lines = [line.strip() for line in content.split('\n') if len(line.strip()) > 10]
+        
+        # Ordenar linhas para ignorar mudanças de ordem
+        lines.sort()
+        
+        return '\n'.join(lines)
     
     def load_last_hash(self) -> str:
         """Carrega último hash salvo"""
