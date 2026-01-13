@@ -2,43 +2,46 @@ name: URBS Monitor
 
 on:
   schedule:
-    - cron: '0 */1 * * *'  # A cada 1 hora
+    - cron: '0 */1 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
       
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
       - name: Setup Chrome
-        uses: browser-actions/setup-chrome@latest
-        
-      - name: Install ChromeDriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-chromedriver
-          
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
       - name: Install dependencies
-        run: pip install selenium beautifulsoup4
-        
+        run: |
+          pip install selenium beautifulsoup4 webdriver-manager
+      
       - name: Run URBS Monitor
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
-        run: python monitor_urbs.py
-        
+        run: |
+          python monitor_urbs.py
+      
       - name: Commit changes
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add urbs_*.json urbs_*.txt
-          git diff --staged --quiet || git commit -m "Update URBS data [skip ci]"
-          git push
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add urbs_*.json urbs_*.txt || true
+          git diff --staged --quiet || git commit -m "Update URBS data $(date -u +'%Y-%m-%d %H:%M')" || true
+          git push || true
