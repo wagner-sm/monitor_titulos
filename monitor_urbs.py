@@ -1,6 +1,5 @@
 """
-URBS Monitor - Versão Simplificada e Específica
-Monitor focado no site da URBS Curitiba com Selenium
+URBS Monitor - Versão Estável para GitHub Actions
 """
 
 import os
@@ -15,36 +14,16 @@ from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
-# Imports Selenium
-try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    print("❌ ERRO: Selenium não instalado!")
-    print("Execute: pip install selenium")
-    sys.exit(1)
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-# Webdriver Manager (opcional - baixa Chrome automaticamente)
-try:
-    from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
-    WEBDRIVER_MANAGER_AVAILABLE = True
-except ImportError:
-    WEBDRIVER_MANAGER_AVAILABLE = False
-    # Não é fatal, apenas uma opção
-
-try:
-    from bs4 import BeautifulSoup
-    BS4_AVAILABLE = True
-except ImportError:
-    print("❌ ERRO: BeautifulSoup não instalado!")
-    print("Execute: pip install beautifulsoup4")
-    sys.exit(1)
+from bs4 import BeautifulSoup
 
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -54,444 +33,260 @@ from email.utils import formataddr
 
 
 class URBSMonitor:
-    """Monitor específico para o site da URBS"""
-    
-    # URL fixa do boletim
+
     URBS_URL = "https://www.urbs.curitiba.pr.gov.br/transporte/boletim-de-transportes"
-    
-    def __init__(self, email_recipients: list, gmail_user: str, gmail_password: str):
-        """
-        Inicializa o monitor
-        
-        Args:
-            email_recipients: Lista de emails para notificação
-            gmail_user: Email Gmail para enviar
-            gmail_password: Senha de app do Gmail
-        """
+
+    def __init__(self, email_recipients, gmail_user, gmail_password):
         self.email_recipients = email_recipients
         self.gmail_user = gmail_user
         self.gmail_password = gmail_password
-        
-        # Arquivos de dados (organizados em pasta)
+
         self.data_dir = Path("data")
         self.data_dir.mkdir(exist_ok=True)
         self.hash_file = self.data_dir / "urbs_hash.json"
         self.content_file = self.data_dir / "urbs_content.txt"
-        
-        # Configurar logging
-        self.setup_logging()
-        
-        # Driver Selenium
+
         self.driver = None
-    
+        self.setup_logging()
+
     def setup_logging(self):
-        """Configura logging simples"""
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
-    
+
+    # ------------------------------------------------------------------
+    # SELENIUM
+    # ------------------------------------------------------------------
     def create_selenium_driver(self):
-        """Cria driver Chrome com anti-detecção (tenta múltiplas opções)"""
         logging.info("🚀 Criando driver Selenium...")
-        
+
         options = Options()
-        options.add_argument('--headless=new')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument('--disable-gpu')
-        
-        # OPÇÃO 1: Tentar com webdriver-manager (melhor opção - automático)
-        if WEBDRIVER_MANAGER_AVAILABLE:
-            try:
-                logging.info("📦 Usando webdriver-manager (download automático)...")
-                service = Service(ChromeDriverManager().install())
-                self.driver = webdriver.Chrome(service=service, options=options)
-                self.driver.set_page_load_timeout(30)
-                
-                try:
-                    self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-                        'source': 'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
-                    })
-                except:
-                    pass
-                
-                logging.info("✅ Driver criado com webdriver-manager")
-                return True
-            except Exception as e:
-                logging.warning(f"⚠️ webdriver-manager falhou: {e}")
-        
-        # OPÇÃO 2: Tentar encontrar Chrome instalado
-        chrome_paths = [
-            '/usr/bin/google-chrome',
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-            '/snap/bin/chromium',
-            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        ]
-        
-        chrome_found = None
-        for path in chrome_paths:
-            if Path(path).exists():
-                chrome_found = path
-                logging.info(f"✅ Chrome encontrado: {path}")
-                options.binary_location = path
-                break
-        
-        if chrome_found:
-            try:
-                self.driver = webdriver.Chrome(options=options)
-                self.driver.set_page_load_timeout(30)
-                
-                try:
-                    self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-                        'source': 'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
-                    })
-                except:
-                    pass
-                
-                logging.info("✅ Driver criado com Chrome local")
-                return True
-            except Exception as e:
-                logging.error(f"❌ Erro ao criar driver: {e}")
-        
-        # Falhou
-        logging.error("")
-        logging.error("❌ NÃO FOI POSSÍVEL CRIAR O DRIVER SELENIUM")
-        logging.error("")
-        logging.error("💡 SOLUÇÕES:")
-        logging.error("")
-        logging.error("   OPÇÃO 1 (RECOMENDADA - AUTOMÁTICA):")
-        logging.error("      pip install webdriver-manager")
-        logging.error("")
-        logging.error("   OPÇÃO 2 (INSTALAR CHROME MANUALMENTE):")
-        logging.error("      Ubuntu/Debian: sudo apt-get install chromium-browser")
-        logging.error("      Fedora: sudo dnf install chromium")
-        logging.error("      Arch: sudo pacman -S chromium")
-        logging.error("      Windows: https://www.google.com/chrome/")
-        logging.error("")
-        return False
-    
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+
+        # 🔑 ESSENCIAL para CI
+        options.page_load_strategy = "eager"
+
+        # Menos consumo
+        options.add_experimental_option(
+            "prefs",
+            {"profile.managed_default_content_settings.images": 2},
+        )
+
+        options.add_argument(
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service, options=options)
+
+        self.driver.set_page_load_timeout(60)
+        self.driver.set_script_timeout(60)
+
+        logging.info("✅ Driver Selenium criado")
+
     def get_urbs_content(self) -> str:
-        """Obtém conteúdo do site da URBS"""
         logging.info(f"🌐 Acessando {self.URBS_URL}")
-        
-        try:
-            if not self.driver:
-                if not self.create_selenium_driver():
-                    return ""
-            
-            # Carregar página
-            self.driver.get(self.URBS_URL)
-            
-            # Aguardar carregamento
-            time.sleep(5)
-            
-            # Aguardar body
+
+        if not self.driver:
+            self.create_selenium_driver()
+
+        # 🔁 Retry automático
+        for attempt in range(2):
             try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
-            except TimeoutException:
-                logging.warning("⚠️ Timeout esperando body")
-            
-            # Obter HTML
-            html = self.driver.page_source
-            
-            logging.info(f"✅ Página carregada: {len(html)} caracteres")
-            
-            # Extrair conteúdo relevante
-            content = self.extract_content(html)
-            
-            return content
-        
-        except Exception as e:
-            logging.error(f"❌ Erro ao obter conteúdo: {e}")
-            return ""
-    
+                self.driver.get(self.URBS_URL)
+                break
+            except Exception as e:
+                logging.warning(f"⚠️ Tentativa {attempt+1} falhou: {e}")
+                if attempt == 1:
+                    raise
+                time.sleep(5)
+
+        try:
+            WebDriverWait(self.driver, 30).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+        except TimeoutException:
+            logging.warning("⚠️ Timeout esperando body")
+
+        time.sleep(10)
+
+        html = self.driver.page_source
+        logging.info(f"✅ Página carregada ({len(html)} chars)")
+
+        return self.extract_content(html)
+
+    # ------------------------------------------------------------------
+    # CONTEÚDO
+    # ------------------------------------------------------------------
     def extract_content(self, html: str) -> str:
-        """Extrai APENAS os títulos relevantes do boletim"""
         if not html:
             return ""
 
-        from bs4 import BeautifulSoup
-        import re
-
         soup = BeautifulSoup(html, "html.parser")
 
-        # Remover lixo
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
         titles = []
+        for h in soup.find_all(["h1", "h2", "h3"]):
+            text = h.get_text(" ", strip=True)
+            if len(text) >= 10:
+                titles.append(text)
 
-        for heading in soup.find_all(["h1", "h2", "h3"]):
-            text = heading.get_text(" ", strip=True)
+        return "\n".join(sorted(set(titles)))
 
-            if not text:
-                continue
+    def calculate_hash(self, content: str) -> str:
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-            # Filtros para evitar lixo
-            if len(text) < 10:
-                continue
-
-            # Ignorar rodapé e links institucionais
-            if re.search(r"(URBANIZAÇÃO DE CURITIBA|©|CURITIBA-OUVE|Secretarias)", text, re.I):
-                continue
-
-            titles.append(f"TÍTULO: {text}")
-
-        # Remove duplicados e ordena
-        titles = sorted(set(titles))
-
-        return "\n".join(titles)
-    
-    def normalize_content(self, content: str) -> str:
-        """Normaliza conteúdo para evitar falsos positivos"""
-        import re
-        
-        # Remover timestamps e datas
-        content = re.sub(r'\d{1,2}/\d{1,2}/\d{2,4}', '', content)
-        content = re.sub(r'\d{1,2}:\d{2}(?::\d{2})?', '', content)
-        
-        # Remover "atualizado em", "última atualização", etc
-        content = re.sub(r'(?i)(atualizado|última atualização|last update).*?\n', '', content)
-        
-        # Remover linhas muito curtas (ruído)
-        lines = [line.strip() for line in content.split('\n') if len(line.strip()) > 10]
-        
-        # Ordenar linhas para ignorar mudanças de ordem
-        lines.sort()
-        
-        return '\n'.join(lines)
-    
     def load_last_hash(self) -> str:
-        """Carrega último hash salvo"""
         if not self.hash_file.exists():
             return ""
-        
-        try:
-            with open(self.hash_file, 'r') as f:
-                data = json.load(f)
-                return data.get('hash', '')
-        except:
-            return ""
-    
+        with open(self.hash_file, "r") as f:
+            return json.load(f).get("hash", "")
+
     def save_hash(self, content_hash: str):
-        """Salva hash atual"""
-        try:
-            data = {
-                'hash': content_hash,
-                'timestamp': datetime.now(LOCAL_TZ).isoformat(),
-                'url': self.URBS_URL
-            }
-            with open(self.hash_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            logging.info("💾 Hash salvo")
-        except Exception as e:
-            logging.error(f"❌ Erro ao salvar hash: {e}")
-    
+        with open(self.hash_file, "w") as f:
+            json.dump(
+                {
+                    "hash": content_hash,
+                    "timestamp": datetime.now(LOCAL_TZ).isoformat(),
+                },
+                f,
+                indent=2,
+            )
+
     def save_content(self, content: str):
-        """Salva conteúdo para referência"""
-        try:
-            with open(self.content_file, 'w', encoding='utf-8') as f:
-                f.write(content)
-            logging.info("💾 Conteúdo salvo")
-        except Exception as e:
-            logging.error(f"❌ Erro ao salvar conteúdo: {e}")
-    
-    def calculate_hash(self, content: str) -> str:
-        """Calcula hash SHA256 do conteúdo"""
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()
-    
-    def detect_change(self, new_content: str) -> bool:
-        """Detecta se houve mudança"""
-        if not new_content or len(new_content) < 100:
-            logging.warning("⚠️ Conteúdo muito curto ou vazio")
+        with open(self.content_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def detect_change(self, content: str) -> bool:
+        if not content or len(content) < 100:
+            logging.warning("⚠️ Conteúdo inválido")
             return False
-        
-        new_hash = self.calculate_hash(new_content)
+
+        new_hash = self.calculate_hash(content)
         old_hash = self.load_last_hash()
-        
-        # Salvar novo conteúdo
-        self.save_content(new_content)
-        
-        # Primeira execução
+
+        self.save_content(content)
+
         if not old_hash:
-            logging.info("🆕 Primeira execução - salvando hash inicial")
             self.save_hash(new_hash)
+            logging.info("🆕 Hash inicial salvo")
             return False
-        
-        # Comparar hashes
+
         if new_hash == old_hash:
             logging.info("✅ Nenhuma mudança detectada")
             return False
-        
-        # Mudança detectada!
-        logging.info("🔔 MUDANÇA DETECTADA!")
-        logging.info(f"   Hash anterior: {old_hash[:16]}...")
-        logging.info(f"   Hash novo: {new_hash[:16]}...")
-        
+
+        logging.info("🔔 MUDANÇA DETECTADA")
         self.save_hash(new_hash)
         return True
-    
+
+    # ------------------------------------------------------------------
+    # EMAIL
+    # ------------------------------------------------------------------
     def send_email_notification(self):
-        """Envia notificação por email"""
-        logging.info("📧 Enviando notificação por email...")
-        
-        if not self.gmail_user or not self.gmail_password:
-            logging.error("❌ Credenciais Gmail não configuradas")
-            return False
-        
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["From"] = formataddr((str(Header("URBS Monitor", "utf-8")), self.gmail_user))
-            msg["To"] = ", ".join(self.email_recipients)
-            msg["Subject"] = Header("🚨 Mudança Detectada no Boletim da URBS", "utf-8")
-            
-            # Conteúdo HTML
-            html_content = f"""
-            <html>
-            <head>
-            <meta charset="UTF-8">
-            <style>
-            body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }}
-            .container {{ max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-            .header {{ background: #1e88e5; color: white; padding: 20px; text-align: center; }}
-            .header h1 {{ margin: 0; font-size: 22px; }}
-            .content {{ padding: 20px; }}
-            .info-box {{ background: #e3f2fd; border-left: 4px solid #1e88e5; padding: 15px; margin: 15px 0; border-radius: 4px; }}
-            .button {{ display: inline-block; background: #1e88e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 15px 0; }}
-            .footer {{ background: #757575; color: white; padding: 15px; text-align: center; font-size: 12px; }}
-            </style>
-            </head>
-            <body>
-            <div class="container">
-            <div class="header">
-            <h1>🚨 Mudança Detectada no Boletim da URBS</h1>
-            </div>
-            
-            <div class="content">
-            <div class="info-box">
-            <p><strong>🌐 Site:</strong> URBS - Boletim de Transportes</p>
-            <p><strong>🕐 Data/Hora:</strong> {datetime.now(LOCAL_TZ).strftime('%d/%m/%Y %H:%M:%S')}</p>
-            <p><strong>📍 URL:</strong> <a href="{self.URBS_URL}">{self.URBS_URL}</a></p>
-            </div>
-            
-            <p>O sistema detectou uma mudança no conteúdo do Boletim de Transportes da URBS.</p>
-            
-            <p style="text-align: center;">
-            <a href="{self.URBS_URL}" class="button">Acessar Boletim</a>
+        logging.info("📧 Enviando email de notificação...")
+
+        msg = MIMEMultipart("alternative")
+        msg["From"] = formataddr(
+            (str(Header("URBS Monitor", "utf-8")), self.gmail_user)
+        )
+        msg["To"] = ", ".join(self.email_recipients)
+        msg["Subject"] = Header(
+            "🚨 Mudança Detectada no Boletim da URBS", "utf-8"
+        )
+
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; background:#f5f5f5;">
+          <div style="max-width:600px;margin:auto;background:#ffffff;padding:20px;border-radius:8px">
+            <h2 style="color:#1e88e5;">🚨 Mudança Detectada</h2>
+            <p>O boletim de transportes da URBS foi atualizado.</p>
+            <ul>
+              <li><b>Data/Hora:</b> {datetime.now(LOCAL_TZ).strftime('%d/%m/%Y %H:%M:%S')}</li>
+              <li><b>URL:</b> <a href="{self.URBS_URL}">{self.URBS_URL}</a></li>
+            </ul>
+            <p>
+              <a href="{self.URBS_URL}"
+                 style="display:inline-block;padding:12px 20px;
+                        background:#1e88e5;color:#fff;
+                        text-decoration:none;border-radius:5px">
+                 Acessar boletim
+              </a>
             </p>
-            </div>
-            
-            <div class="footer">
-            🤖 URBS Monitor - Sistema Automático de Monitoramento<br>
-            <small>Não responda este e-mail</small>
-            </div>
-            </div>
-            </body>
-            </html>
-            """
-            
-            html_part = MIMEText(html_content, "html", "utf-8")
-            msg.attach(html_part)
-            
-            # Enviar via Gmail SMTP
-            with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(self.gmail_user, self.gmail_password)
-                server.sendmail(self.gmail_user, self.email_recipients, msg.as_string())
-            
-            logging.info("✅ Email enviado com sucesso!")
-            return True
-        
-        except Exception as e:
-            logging.error(f"❌ Erro ao enviar email: {e}")
-            return False
-    
+            <hr>
+            <small>URBS Monitor • envio automático</small>
+          </div>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(self.gmail_user, self.gmail_password)
+            server.sendmail(
+                self.gmail_user,
+                self.email_recipients,
+                msg.as_string(),
+            )
+
+        logging.info("✅ Email enviado com sucesso")
+
+    # ------------------------------------------------------------------
+    # RUN
+    # ------------------------------------------------------------------
     def run(self):
-        """Executa o monitoramento"""
         logging.info("=" * 60)
         logging.info("🚀 URBS MONITOR - Iniciando")
         logging.info("=" * 60)
-        
+
         try:
-            # Obter conteúdo
             content = self.get_urbs_content()
-            
             if not content:
-                logging.error("❌ Falha ao obter conteúdo")
-                return False
-            
-            # Detectar mudança
-            changed = self.detect_change(content)
-            
-            if changed:
-                logging.info("🔔 Mudança detectada! Enviando notificação...")
+                raise RuntimeError("Conteúdo vazio")
+
+            if self.detect_change(content):
                 self.send_email_notification()
-            
-            logging.info("=" * 60)
-            logging.info("✅ URBS MONITOR - Concluído")
-            logging.info("=" * 60)
-            
+
+            logging.info("✅ Monitor concluído")
             return True
-        
+
         except Exception as e:
-            logging.error(f"❌ Erro fatal: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.error(f"❌ Erro: {e}")
             return False
-        
+
         finally:
-            # Fechar driver
             if self.driver:
-                try:
-                    self.driver.quit()
-                    logging.info("🔒 Driver Selenium fechado")
-                except:
-                    pass
+                self.driver.quit()
+                logging.info("🔒 Driver Selenium fechado")
 
 
 def main():
-    """Função principal"""
-    
-    # Obter configurações de variáveis de ambiente
     gmail_user = os.getenv("GMAIL_USER")
     gmail_password = os.getenv("GMAIL_APP_PASSWORD")
     email_recipients = os.getenv("EMAIL_RECIPIENTS", "").split(",")
-    
-    # Validar configurações
-    if not gmail_user or not gmail_password:
-        print("❌ ERRO: Configure as variáveis de ambiente:")
-        print("   GMAIL_USER - seu email Gmail")
-        print("   GMAIL_APP_PASSWORD - senha de app do Gmail")
+
+    if not gmail_user or not gmail_password or not email_recipients:
+        print("❌ Variáveis de ambiente não configuradas")
         sys.exit(1)
-    
-    if not email_recipients or email_recipients == ['']:
-        print("❌ ERRO: Configure EMAIL_RECIPIENTS")
-        print("   Exemplo: export EMAIL_RECIPIENTS='email1@example.com,email2@example.com'")
-        sys.exit(1)
-    
-    # Criar e executar monitor
+
     monitor = URBSMonitor(
         email_recipients=email_recipients,
         gmail_user=gmail_user,
-        gmail_password=gmail_password
+        gmail_password=gmail_password,
     )
-    
-    success = monitor.run()
-    
-    sys.exit(0 if success else 1)
+
+    sys.exit(0 if monitor.run() else 1)
 
 
 if __name__ == "__main__":
