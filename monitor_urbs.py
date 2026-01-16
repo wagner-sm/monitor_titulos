@@ -124,67 +124,36 @@ class URBSMonitor:
         if not self.driver:
             self.create_selenium_driver()
 
-        # Retry com backoff exponencial
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                logging.info(f"📡 Tentativa {attempt + 1}/{max_attempts}")
-                
-                # Usar get() sem esperar carregamento completo
-                self.driver.get(self.URBS_URL)
-                
-                # Esperar apenas pelo DOM inicial (mais rápido)
-                try:
-                    WebDriverWait(self.driver, 15).until(
-                        EC.presence_of_element_located((By.TAG_NAME, "body"))
-                    )
-                    logging.info("✅ Body detectado")
-                except TimeoutException:
-                    logging.warning("⚠️ Timeout esperando body, continuando...")
-                
-                # Dar tempo para JavaScript carregar conteúdo dinâmico
-                # mas parar a renderização se necessário
-                time.sleep(8)
-                
-                # Tentar parar o carregamento da página
-                try:
-                    self.driver.execute_script("window.stop();")
-                    logging.info("🛑 Carregamento parado manualmente")
-                except:
-                    pass
-                
-                html = self.driver.page_source
-                
-                # Validar se pegamos conteúdo útil
-                if len(html) < 5000:
-                    raise ValueError(f"HTML muito pequeno: {len(html)} bytes")
-                
-                logging.info(f"✅ Página carregada ({len(html)} chars)")
-                return self.extract_content(html)
-                
-            except Exception as e:
-                logging.warning(f"⚠️ Tentativa {attempt + 1} falhou: {str(e)[:200]}")
-                
-                if attempt < max_attempts - 1:
-                    # Backoff exponencial: 5s, 10s
-                    wait_time = 5 * (attempt + 1)
-                    logging.info(f"⏳ Aguardando {wait_time}s antes de tentar novamente...")
-                    time.sleep(wait_time)
-                    
-                    # Recriar driver na última tentativa
-                    if attempt == max_attempts - 2:
-                        logging.info("🔄 Recriando driver para última tentativa...")
-                        if self.driver:
-                            try:
-                                self.driver.quit()
-                            except:
-                                pass
-                        self.driver = None
-                        self.create_selenium_driver()
-                else:
-                    raise
-
-        raise RuntimeError("Todas as tentativas falharam")
+        # Usar get() sem esperar carregamento completo
+        self.driver.get(self.URBS_URL)
+        
+        # Esperar apenas pelo DOM inicial (mais rápido)
+        try:
+            WebDriverWait(self.driver, 15).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            logging.info("✅ Body detectado")
+        except TimeoutException:
+            logging.warning("⚠️ Timeout esperando body, continuando...")
+        
+        # Dar tempo para JavaScript carregar conteúdo dinâmico
+        time.sleep(8)
+        
+        # Tentar parar o carregamento da página
+        try:
+            self.driver.execute_script("window.stop();")
+            logging.info("🛑 Carregamento parado manualmente")
+        except:
+            pass
+        
+        html = self.driver.page_source
+        
+        # Validar se pegamos conteúdo útil
+        if len(html) < 5000:
+            raise ValueError(f"HTML muito pequeno: {len(html)} bytes")
+        
+        logging.info(f"✅ Página carregada ({len(html)} chars)")
+        return self.extract_content(html)
 
     # ------------------------------------------------------------------
     # CONTEÚDO
