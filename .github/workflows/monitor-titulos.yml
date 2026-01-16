@@ -1,4 +1,4 @@
-name: URBS Monitor
+name: Monitor Titulos
 
 on:
   schedule:
