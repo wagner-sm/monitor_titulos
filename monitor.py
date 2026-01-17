@@ -41,7 +41,8 @@ class MultiSiteMonitor:
     SITES = [
         "https://www.urbs.curitiba.pr.gov.br/transporte/boletim-de-transportes",
         "https://www.eueanatureza.com.br/ensaios_modelos",
-        "https://www.rektmag.net/"
+        "https://www.rektmag.net/",
+        "https://illuminateboudoir.com/blog"
     ]
 
     def __init__(self, email_recipients, gmail_user, gmail_password):
