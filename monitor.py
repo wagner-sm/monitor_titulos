@@ -52,6 +52,10 @@ class MultiSiteMonitor:
         self.data_dir = Path("data")
         self.data_dir.mkdir(exist_ok=True)
         
+        # Arquivos únicos para todos os sites
+        self.hash_file = self.data_dir / "hash.json"
+        self.content_file = self.data_dir / "content.txt"
+        
         self.driver = None
         self.setup_logging()
 
@@ -192,44 +196,72 @@ class MultiSiteMonitor:
         return "\n".join(sorted(set(titles)))
 
     # ------------------------------------------------------------------
-    # HASH E DETECÇÃO DE MUDANÇAS
+    # HASH E DETECÇÃO DE MUDANÇAS - ARQUIVOS ÚNICOS
     # ------------------------------------------------------------------
     def calculate_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-    def get_site_hash_file(self, url: str) -> Path:
-        """Retorna o arquivo de hash para um site específico"""
-        site_name = self.get_site_name(url)
-        return self.data_dir / f"{site_name.lower()}_hash.json"
+    def load_all_hashes(self) -> Dict[str, Dict]:
+        """Carrega todos os hashes do arquivo hash.json"""
+        if not self.hash_file.exists():
+            return {}
+        
+        try:
+            with open(self.hash_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"Erro ao carregar hashes: {e}")
+            return {}
 
-    def get_site_content_file(self, url: str) -> Path:
-        """Retorna o arquivo de conteúdo para um site específico"""
-        site_name = self.get_site_name(url)
-        return self.data_dir / f"{site_name.lower()}_content.txt"
+    def save_all_hashes(self, hashes: Dict[str, Dict]):
+        """Salva todos os hashes no arquivo hash.json"""
+        with open(self.hash_file, "w", encoding="utf-8") as f:
+            json.dump(hashes, f, indent=2, ensure_ascii=False)
 
-    def load_last_hash(self, url: str) -> str:
-        hash_file = self.get_site_hash_file(url)
-        if not hash_file.exists():
-            return ""
-        with open(hash_file, "r") as f:
-            return json.load(f).get("hash", "")
+    def load_all_contents(self) -> Dict[str, str]:
+        """Carrega todos os conteúdos do arquivo content.txt"""
+        if not self.content_file.exists():
+            return {}
+        
+        try:
+            contents = {}
+            with open(self.content_file, "r", encoding="utf-8") as f:
+                current_url = None
+                current_content = []
+                
+                for line in f:
+                    if line.startswith("=== URL: "):
+                        # Salvar conteúdo anterior
+                        if current_url:
+                            contents[current_url] = "\n".join(current_content).strip()
+                        
+                        # Nova URL
+                        current_url = line.replace("=== URL: ", "").strip()
+                        current_content = []
+                    elif line.startswith("=== END ==="):
+                        if current_url:
+                            contents[current_url] = "\n".join(current_content).strip()
+                            current_url = None
+                            current_content = []
+                    else:
+                        current_content.append(line.rstrip())
+                
+                # Último conteúdo
+                if current_url:
+                    contents[current_url] = "\n".join(current_content).strip()
+            
+            return contents
+        except Exception as e:
+            logging.warning(f"Erro ao carregar conteúdos: {e}")
+            return {}
 
-    def save_hash(self, url: str, content_hash: str):
-        hash_file = self.get_site_hash_file(url)
-        with open(hash_file, "w") as f:
-            json.dump(
-                {
-                    "hash": content_hash,
-                    "timestamp": datetime.now(LOCAL_TZ).isoformat(),
-                },
-                f,
-                indent=2,
-            )
-
-    def save_content(self, url: str, content: str):
-        content_file = self.get_site_content_file(url)
-        with open(content_file, "w", encoding="utf-8") as f:
-            f.write(content)
+    def save_all_contents(self, contents: Dict[str, str]):
+        """Salva todos os conteúdos no arquivo content.txt"""
+        with open(self.content_file, "w", encoding="utf-8") as f:
+            for url, content in contents.items():
+                f.write(f"=== URL: {url}\n")
+                f.write(content)
+                f.write("\n=== END ===\n\n")
 
     def detect_change(self, url: str, content: str) -> bool:
         """Detecta se houve mudança no conteúdo de um site"""
@@ -239,13 +271,26 @@ class MultiSiteMonitor:
             logging.warning(f"⚠️ {site_name} - Conteúdo inválido ({len(content)} chars)")
             return False
 
-        new_hash = self.calculate_hash(content)
-        old_hash = self.load_last_hash(url)
+        # Carregar dados existentes
+        all_hashes = self.load_all_hashes()
+        all_contents = self.load_all_contents()
 
-        self.save_content(url, content)
+        # Calcular novo hash
+        new_hash = self.calculate_hash(content)
+        old_hash = all_hashes.get(url, {}).get("hash", "")
+
+        # Atualizar conteúdo
+        all_contents[url] = content
+        self.save_all_contents(all_contents)
+
+        # Atualizar hash
+        all_hashes[url] = {
+            "hash": new_hash,
+            "timestamp": datetime.now(LOCAL_TZ).isoformat(),
+        }
+        self.save_all_hashes(all_hashes)
 
         if not old_hash:
-            self.save_hash(url, new_hash)
             logging.info(f"🆕 {site_name} - Hash inicial salvo")
             return False
 
@@ -254,7 +299,6 @@ class MultiSiteMonitor:
             return False
 
         logging.info(f"🔔 {site_name} - MUDANÇA DETECTADA")
-        self.save_hash(url, new_hash)
         return True
 
     # ------------------------------------------------------------------
@@ -342,7 +386,7 @@ class MultiSiteMonitor:
             for url in self.SITES:
                 site_name = self.get_site_name(url)
                 try:
-                    logging.info(f"\n📍 Verificando: {site_name}")
+                    logging.info(f"\n🔍 Verificando: {site_name}")
                     
                     content = self.get_site_content(url)
                     
