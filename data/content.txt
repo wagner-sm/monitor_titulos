@@ -1,14 +1,10 @@
 === URL: https://www.urbs.curitiba.pr.gov.br/transporte/boletim-de-transportes
 Boletim do transporte
-Concurso da Guarda Municipal de Curitiba - 18/01
-Linha 010 - INTERBAIRROS I (HORÁRIO) - Desvio de itinerário - Evento de Carnaval - 18/01
 Linha 471 - V. SÃO PAULO - Desvio de itinerário - A partir de 19/01
 Linha 512 - ITAMARATI - Desvio de itinerário - A partir de 08/01
-Linha 979 - TURISMO - Desvio de itinerário - Domingo no Centro - 18/01
 Linhas Diversas - Alterações de horário - A partir de 17/01
 Linhas Diversas - Desvio de itinerário - Bloqueio Viaduto Estaiado - 19/01 a 20/01
 Ponto de parada desativado - Av. Manoel Ribas - A partir de 14/01
-Reativação Estação Tubo Mercês - A partir de 15/01
 === END ===
 
 === URL: https://www.eueanatureza.com.br/ensaios_modelos
