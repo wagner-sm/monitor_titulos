@@ -43,9 +43,13 @@ jobs:
           EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
       
       - name: Commit changes
+        env:
+          TZ: America/Sao_Paulo
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/ || true
-          git diff --staged --quiet || git commit -m "Update URBS data $(date -u +'%Y-%m-%d %H:%M')" || true
-          git push || true
+          git add data/
+          git diff --staged --quiet || (
+            git commit -m "Update data $(date +'%Y-%m-%d %H:%M')" &&
+            git push
+          )
