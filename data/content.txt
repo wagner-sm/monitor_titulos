@@ -1,13 +1,7 @@
 === URL: https://www.urbs.curitiba.pr.gov.br/transporte/boletim-de-transportes
 Boletim do transporte
-CONCURSO PÚBLICO DA SECRETARIA DA FAZENDA DO PARANÁ - SEFA PR - 25/01
-CONCURSO PÚBLICO DA SECRETARIA DA FAZENDA DO PARANÁ - SEFA PR - dia 25/01
-Desvio de  Itinerário - Sítio Cercado - 25/01
-Desvio de Itinerário - Batel  Run 2026- 25/01
-Desvio de itinerário - Av. Jaime Reis - 22, 23 e 25/01
 Linha 471 - V. SÃO PAULO - Desvio de itinerário - A partir de 19/01
 Linha 512 - ITAMARATI - Desvio de itinerário - A partir de 08/01
-Linhas 466 - ESTUDANTES E 979 - TURISMO - Desvio de Itinerário - Evento Pré  Carnaval - 25/01
 Linhas diversas - Alterações de horário - a partir de 26/01
 Ponto de parada desativado - Av. Manoel Ribas - A partir de 14/01
 === END ===
