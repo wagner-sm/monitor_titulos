@@ -1,15 +1,15 @@
 === URL: https://www.urbs.curitiba.pr.gov.br/transporte/boletim-de-transportes
 Boletim do transporte
+Concurso da Caixa Econômica Federal - 01/02
 Linha 010 - INTERBAIRROS I (HORÁRIO) - Desvio de Itinerário - Evento de pré-carnaval - 01/02
 Linha 010 - INTERBAIRROS I (HORÁRIO) - Novo local de parada - A partir de 02/02
-Linha 466 - ESTUDANTES - Seccionamento de Itinerário - 30/01
 Linhas 361 - AUGUSTO STRESSER e 374 - HUGO LANGE - Desvio de Itinerário - 01/02
 Linhas Diversas - Alterações de horário - A partir de 31/01
 Linhas Diversas - Desvio de Itinerário - Pré-Carnaval Garibaldis e Sacis R. Mal. Deodoro - 01/02
 Linhas Diversas - Desvio de itinerário - 2ª Corrida da PRF - 80 Anos no Paraná - 01/02
 Linhas Diversas - Desvio de itinerário - Montagem das estruturas do Carnaval 2026
 Linhas Diversas - Desvio de itinerário - Obras Av. Visconde de Guarapuava - 01/02
-Linhas Diversas - Desvio de itinerário - Pré-Carnaval R. Jaime Reis - 30/01
+Linhas diversas - Desvio de Itinerário - Obras Rua Filipinas 28/01
 === END ===
 
 === URL: https://www.eueanatureza.com.br/ensaios_modelos
